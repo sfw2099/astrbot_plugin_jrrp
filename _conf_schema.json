@@ -1,1 +1,32 @@
-
+{
+    "type": "object",
+    "properties": {
+        "weighted_random": {
+            "type": "boolean",
+            "title": "启用加权随机",
+            "description": "开启后，高分段的人品值出现概率更高",
+            "default": true
+        },
+        "fortune_levels": {
+            "type": "array",
+            "title": "运势等级配置",
+            "description": "配置不同人品值范围对应的文案",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "min": { "type": "integer", "title": "最小值", "minimum": 1, "maximum": 100 },
+                    "max": { "type": "integer", "title": "最大值", "minimum": 1, "maximum": 100 },
+                    "desc": { "type": "string", "title": "运势描述" }
+                },
+                "required": ["min", "max", "desc"]
+            },
+            "default": [
+                {"min": 1, "max": 10, "desc": "人品已欠费停机，建议今天就躺平吧！🥲"},
+                {"min": 11, "max": 30, "desc": "普通的一天，像白开水一样平淡无奇~"},
+                {"min": 31, "max": 60, "desc": "运气不错哦，可以试试抽卡或者告白什么的！✨"},
+                {"min": 61, "role": 80, "desc": "今日锦鲤附体！适合做重要决定和冒险！🐟"},
+                {"min": 81, "max": 100, "desc": "欧皇降临！今天你就是天选之人，无敌了！👑"}
+            ]
+        }
+    }
+}
