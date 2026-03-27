@@ -15,8 +15,8 @@ class MyPlugin(Star):
         '''今日人品值查询，每个用户每天固定，范围1-100'''
         user_name = event.get_sender_name()
         
-        # 从 _conf_schema.json 加载配置
-        config = self.context.get_config()
+        # 安全获取配置
+        config = self.context.get_config() or {}
         weighted_random = config.get("weighted_random", True)
         fortune_levels = config.get("fortune_levels", [])
 
@@ -36,14 +36,18 @@ class MyPlugin(Star):
         else:
             rp = random.randint(1, 100)
 
-        # 从配置中查找对应的描述
+        # 查找对应的描述
         message_str = "今天的运势未知，请自行判断！"
         for level in fortune_levels:
-            if level["min"] <= rp <= level["max"]:
-                message_str = level["desc"]
+            # 增加安全检查，防止配置项缺失 key
+            l_min = level.get("min", 0)
+            l_max = level.get("max", 0)
+            if l_min <= rp <= l_max:
+                message_str = level.get("desc", message_str)
                 break
 
         yield event.plain_result(f"{user_name}，你今天的人品是{rp}，{message_str}")
 
     async def terminate(self):
-        '''可选择实现 terminate 函数，当插件被卸载/停用时会调用。'''
+        '''当插件被卸载/停用时会调用。'''
+        pass
