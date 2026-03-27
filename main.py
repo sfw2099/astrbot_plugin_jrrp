@@ -10,7 +10,7 @@ class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    @filter.command("jrrp_setting")
+    @filter.command("jrrp_info")
     async def show_config(self, event: AstrMessageEvent):
         '''显示当前插件配置'''
         config = self.context.get_config() or {}
