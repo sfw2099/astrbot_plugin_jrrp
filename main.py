@@ -9,41 +9,68 @@ from zoneinfo import ZoneInfo
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
+        logger.info("[jrrp] 插件初始化完成")
 
-    @filter.command("今日运势设置")
-    async def show_config(self, event: AstrMessageEvent):
-        '''显示当前插件配置'''
-        config = self.context.get_config() or {}
+    def _get_plugin_config(self):
+        """
+        安全地获取本插件的配置字典。
+        AstrBot中，插件配置可能存储在全局配置的以插件ID（'jrrp'）为键的子字典中。
+        """
+        # 1. 获取完整配置
+        all_config = self.context.get_config() or {}
         
-        # 检查AI提供商
+        # 2. 优先尝试从插件ID键下获取配置（这是AstrBot常见存储方式）
+        plugin_config = all_config.get("jrrp", {})
+        
+        # 3. 如果上述方式未找到，尝试直接从根配置中查找（备用逻辑）
+        if not plugin_config and "use_ai_description" in all_config:
+            # 如果配置是扁平化的，则直接使用根配置
+            plugin_config = all_config
+            logger.info("[jrrp] 配置模式：扁平化根配置")
+        else:
+            logger.info(f"[jrrp] 配置模式：嵌套配置 (jrrp: {plugin_config})")
+        
+        return plugin_config
+
+    @filter.command("rpconfig")
+    async def show_config(self, event: AstrMessageEvent):
+        '''显示当前插件配置 - 使用更独特的命令名'''
+        plugin_config = self._get_plugin_config()
+        
+        # 从正确的配置位置读取值
+        use_ai = plugin_config.get("use_ai_description", False)
+        is_weighted = plugin_config.get("weighted_random", True)
+        
+        # 检查AI提供商是否可用
         umo = event.unified_msg_origin
         provider_id = await self.context.get_current_chat_provider_id(umo=umo)
         
-        info = f"""当前配置:
-- 启用高分加权: {config.get('weighted_random', True)}
-- 启用AI运势解读: {config.get('use_ai_description', False)}
-- 当前AI提供商: {provider_id or '未配置'}"""
+        info = f"""🔧 jrrp插件当前配置：
+• 启用AI运势解读: **{"✅ 是" if use_ai else "❌ 否"}**
+• 启用高分加权: **{"✅ 是" if is_weighted else "❌ 否"}**
+• 可用AI提供商: {provider_id or "（未配置或全局未启用）"}"""
         
         yield info
 
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent = None):
         '''今日人品值查询'''
-        logger.info(f"[jrrp] 开始处理命令，event: {event}")
+        logger.info(f"[jrrp] 开始处理命令")
         
         if event is None:
             yield "无法获取事件信息"
             return
         
         user_name = event.get_sender_name()
-        config = self.context.get_config() or {}
-        is_weighted = config.get("weighted_random", True)
-        use_ai = config.get("use_ai_description", False)
         
-        logger.info(f"[jrrp] 用户名: {user_name}, 配置: {config}")
-        logger.info(f"[jrrp] use_ai配置值: {use_ai}, 类型: {type(use_ai)}")
+        # 使用修正后的方法获取配置
+        plugin_config = self._get_plugin_config()
+        use_ai = plugin_config.get("use_ai_description", False)
+        is_weighted = plugin_config.get("weighted_random", True)
         
-        # 生成人品值（修正：使用完整逻辑而不是硬编码）
+        logger.info(f"[jrrp] 用户:{user_name}, AI启用状态:{use_ai}, 加权状态:{is_weighted}")
+        
+        # 生成基于日期的确定性随机人品值
         utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
         date_str = utc_8.strftime("/%y/%m%d")
         userseed = hash(date_str + user_name)
@@ -57,51 +84,45 @@ class MyPlugin(Star):
         else:
             rp = random.randint(1, 100)
         
+        logger.info(f"[jrrp] 生成人品值: {rp}")
+        
+        # 根据配置决定使用AI生成还是固定描述
         if use_ai:
-            logger.info(f"[jrrp] AI功能已启用，准备调用AI，人品值: {rp}")
+            logger.info(f"[jrrp] AI功能已启用，尝试调用...")
             try:
                 umo = event.unified_msg_origin
-                logger.info(f"[jrrp] unified_msg_origin: {umo}")
-                
                 provider_id = await self.context.get_current_chat_provider_id(umo=umo)
-                logger.info(f"[jrrp] 获取到provider_id: {provider_id}")
                 
                 if not provider_id:
-                    logger.warning(f"[jrrp] 未获取到可用的AI模型提供商")
-                    message_str = self._get_fallback_description(rp, config)
+                    message_str = self._get_fallback_description(rp, plugin_config)
+                    logger.warning(f"[jrrp] 无可用AI提供商，已回退到固定描述。")
                 else:
-                    prompt = f"""用户{user_name}今天的人品值是{rp}（范围1-100）。
-请根据这个人品值生成一段有趣、个性化的今日运势解读。
-要求：
-1. 语气活泼亲切，带点幽默感
-2. 针对{rp}这个具体数值给出相应建议
-3. 包含1-2个具体的今日小贴士
-4. 用中文回复，长度在50-100字左右"""
+                    # 构造请求AI的提示词
+                    prompt = f"""用户“{user_name}”的今日人品值（随机生成，范围1-100）为：{rp}。
+请根据此数值，生成一段简短、有趣、幽默的“今日运势”解读。用中文回答，长度控制在100字以内。"""
                     
-                    logger.info(f"[jrrp] 开始调用AI，prompt长度: {len(prompt)}")
-                    
+                    logger.info(f"[jrrp] 调用AI模型: {provider_id}")
                     llm_resp = await self.context.llm_generate(
                         chat_provider_id=provider_id,
                         prompt=prompt,
-                        max_tokens=200,
+                        max_tokens=150,
                         temperature=0.8
                     )
                     
                     message_str = llm_resp.completion_text.strip()
-                    logger.info(f"[jrrp] AI生成成功: {message_str}")
+                    logger.info(f"[jrrp] AI生成成功，内容: {message_str[:50]}...")
                     
             except Exception as e:
-                logger.error(f"[jrrp] AI调用异常: {str(e)}", exc_info=True)
-                message_str = self._get_fallback_description(rp, config)
+                logger.error(f"[jrrp] AI调用过程中发生异常: {e}", exc_info=True)
+                message_str = self._get_fallback_description(rp, plugin_config)
         else:
-            logger.info(f"[jrrp] AI功能未启用，使用固定描述")
-            message_str = self._get_fallback_description(rp, config)
+            message_str = self._get_fallback_description(rp, plugin_config)
+            logger.info(f"[jrrp] AI功能未启用，使用固定描述。")
         
-        logger.info(f"[jrrp] 最终回复: {message_str}")
-        yield event.plain_result(f"{user_name}，你今天的人品是{rp}，{message_str}")
+        yield event.plain_result(f"{user_name}，你今天的人品值是{rp}！{message_str}")
 
     def _get_fallback_description(self, rp: int, config: dict) -> str:
-        """获取固定描述（原逻辑）"""
+        """当AI未启用或调用失败时使用的固定描述后备"""
         if 1 <= rp <= 10:
             return config.get("desc_1", "人品已欠费停机，建议今天就躺平吧！🥲")
         elif 11 <= rp <= 30:
@@ -115,4 +136,4 @@ class MyPlugin(Star):
         return "今天的运势未知，请自行判断！"
 
     async def terminate(self):
-        pass
+        logger.info("[jrrp] 插件终止")
