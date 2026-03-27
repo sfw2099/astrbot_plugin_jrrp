@@ -1,6 +1,6 @@
 {
     "weighted_random": {
-        "type": "boolean",
+        "type": "bool",
         "title": "启用高分加权",
         "description": "开启后，高分段的人品值出现概率更高",
         "default": true
