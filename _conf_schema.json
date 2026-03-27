@@ -1,36 +1,33 @@
 {
-    "type": "object",
-    "properties": {
-        "weighted_random": {
-            "type": "boolean",
-            "title": "启用高分加权",
-            "description": "开启后，高分段的人品值出现概率更高",
-            "default": true
-        },
-        "desc_1": {
-            "type": "string",
-            "title": "运势描述 (1-10)",
-            "default": "感知系统异常，建议原地待机。🥲"
-        },
-        "desc_2": {
-            "type": "string",
-            "title": "运势描述 (11-30)",
-            "default": "普通的一天，像白开水一样平淡无奇~"
-        },
-        "desc_3": {
-            "type": "string",
-            "title": "运势描述 (31-60)",
-            "default": "运气不错哦，适合进行一些小实验！✨"
-        },
-        "desc_4": {
-            "type": "string",
-            "title": "运势描述 (61-80)",
-            "default": "今日锦鲤附体！适合做重要决定和冒险！🐟"
-        },
-        "desc_5": {
-            "type": "string",
-            "title": "运势描述 (81-100)",
-            "default": "全自动化采摘模式开启！今天你就是天选之人。👑"
-        }
+    "weighted_random": {
+        "type": "boolean",
+        "title": "启用高分加权",
+        "description": "开启后，高分段的人品值出现概率更高",
+        "default": true
+    },
+    "desc_1": {
+        "type": "string",
+        "title": "运势描述 (1-10)",
+        "default": "人品已欠费停机，建议今天就躺平吧！🥲"
+    },
+    "desc_2": {
+        "type": "string",
+        "title": "运势描述 (11-30)",
+        "default": "普通的一天，像白开水一样平淡无奇~"
+    },
+    "desc_3": {
+        "type": "string",
+        "title": "运势描述 (31-60)",
+        "default": "运气不错哦，可以试试抽卡或者告白什么的！✨"
+    },
+    "desc_4": {
+        "type": "string",
+        "title": "运势描述 (61-80)",
+        "default": "今日锦鲤附体！适合做重要决定和冒险！🐟"
+    },
+    "desc_5": {
+        "type": "string",
+        "title": "运势描述 (81-100)",
+        "default": "欧皇降临！今天你就是天选之人，无敌了！👑"
     }
 }
