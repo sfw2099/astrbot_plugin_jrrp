@@ -15,7 +15,7 @@ class MyPlugin(Star):
         '''今日人品值查询，每个用户每天固定，范围1-100'''
         if event is None:
             # 处理event为空的情况，例如直接返回一个结果
-            yield “无法获取事件信息”
+            yield "无法获取事件信息"
             return
         user_name = event.get_sender_name()
         
