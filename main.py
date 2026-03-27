@@ -11,30 +11,35 @@ class MyPlugin(Star):
         super().__init__(context)
 
     def get_plugin_config(self):
-        '''安全提取本插件专属配置的辅助函数'''
+        """
+        核心修复：安全提取插件专属配置。
+        AstrBot 将插件配置存储在全局配置的 plugins 节点下，键名为 metadata.yaml 中的 name。
+        """
         global_config = self.context.get_config() or {}
         plugins_cfg = global_config.get("plugins", {})
         
-        # 严格匹配 metadata.yaml 中的 name: jrrp
-        if "jrrp" in plugins_cfg:
-            return plugins_cfg["jrrp"]
-        # 兼容备用名
+        # 对应 metadata.yaml 中的 name: jrrp
+        plugin_name = "jrrp" 
+        
+        if plugin_name in plugins_cfg:
+            return plugins_cfg[plugin_name]
+        
+        # 兼容性处理：尝试匹配 ID 格式
         elif "astrbot_plugin_jrrp" in plugins_cfg:
             return plugins_cfg["astrbot_plugin_jrrp"]
-        
-        # 如果还是找不到，把当前的键打出来方便排查
-        logger.warning(f"[jrrp] 未找到专属配置节点。当前已有的插件配置键为: {list(plugins_cfg.keys())}")
+            
         return {}
 
     @filter.command("jrrpcfg")
     async def jrrpcfg(self, event: AstrMessageEvent):
-        '''查询当前配置状态，防止事件穿透给主 AI'''
+        '''查询当前配置状态，验证配置是否生效'''
         cfg = self.get_plugin_config()
-        use_ai = cfg.get("use_ai_description", True)
+        # 注意：这里从配置中取值，若取不到则使用代码默认值
+        use_ai = cfg.get("use_ai_description", False)
         is_weighted = cfg.get("weighted_random", True)
         
         reply = (
-            "🔧 当前 JRRP 配置状态：\n"
+            "🔧 当前 JRRP 内部读取到的配置：\n"
             f"AI 动态生成: {'开启 🟢' if use_ai else '关闭 🔴'}\n"
             f"高分加权算法: {'开启 🟢' if is_weighted else '关闭 🔴'}"
         )
@@ -45,10 +50,12 @@ class MyPlugin(Star):
         '''今日人品值查询'''
         user_name = event.get_sender_name()
         
+        # 获取实时配置
         config = self.get_plugin_config()
         is_weighted = config.get("weighted_random", True)
         use_ai = config.get("use_ai_description", False)
 
+        # 1. 计算人品值 (保持原有逻辑)
         utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
         date_str = utc_8.strftime("/%y/%m%d")
         userseed = hash(date_str + user_name)
@@ -62,25 +69,28 @@ class MyPlugin(Star):
         else:
             rp = random.randint(1, 100)
 
-        # ====== AI 动态生成逻辑 ======
+        # 2. AI 动态生成逻辑
         if use_ai:
-            provider = self.context.get_using_provider()
-            if provider:
+            try:
+                # 使用推荐的新版 LLM 调用方式
+                provider_id = await self.context.get_current_chat_provider_id(event.unified_msg_origin)
                 prompt = (
-                    f"用户 {user_name} 今天的“人品值”（幸运值）抽到了 {rp}（满分100）。"
-                    "请严格遵守你当前的角色设定和语气，用生动有趣的话告诉他今天的运势如何。字数控制在60字以内。"
+                    f"用户 {user_name} 今天的“人品值”是 {rp}（满分100）。"
+                    "请根据这个分数，用生动幽默且符合你人格设定的语气写一段运势简评。字数50字以内。"
                 )
-                try:
-                    response = await provider.text_chat(prompt)
-                    ai_reply = response.text
-                    yield event.plain_result(f"{user_name}，你今天的人品是 {rp}！\n{ai_reply}")
-                    return 
-                except Exception as e:
-                    logger.error(f"[jrrp] 请求 AI 失败，回退到静态文案: {e}")
-            else:
-                logger.warning("[jrrp] 未获取到可用的 AI Provider，回退到静态配置文案。")
+                
+                llm_resp = await self.context.llm_generate(
+                    chat_provider_id=provider_id,
+                    prompt=prompt
+                )
+                
+                ai_reply = llm_resp.completion_text
+                yield event.plain_result(f"{user_name}，你今天的人品是 {rp}！\n{ai_reply}")
+                return 
+            except Exception as e:
+                logger.error(f"[jrrp] AI 生成失败: {e}")
 
-        # ====== 静态文案兜底逻辑 ======
+        # 3. 静态文案兜底逻辑
         message_str = "今天的运势未知，请自行判断！"
         if 1 <= rp <= 10:
             message_str = config.get("desc_1", "人品已欠费停机，建议今天就躺平吧！🥲")
