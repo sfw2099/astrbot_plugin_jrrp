@@ -11,62 +11,61 @@ class MyPlugin(Star):
         super().__init__(context)
 
     @filter.command("jrrp")
-    async def jrrp(self, event: AstrMessageEvent):
-        '''今日人品值查询，每个用户每天固定，范围1-100，AI生成运势解读'''
-        user_name = event.get_sender_name()
+    async def jrrp(self, event: AstrMessageEvent = None):
+        '''今日人品值查询'''
+        logger.info(f"[jrrp] 开始处理命令，event: {event}")
         
-        # 获取配置
+        if event is None:
+            yield "无法获取事件信息"
+            return
+        
+        user_name = event.get_sender_name()
         config = self.context.get_config() or {}
         is_weighted = config.get("weighted_random", True)
-        use_ai = config.get("use_ai_description", False)  # 新增配置：是否使用AI生成描述
-
-        # 生成人品值（保持原有逻辑）
-        utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
-        date_str = utc_8.strftime("/%y/%m%d")
-        userseed = hash(date_str + user_name)
-        random.seed(userseed)
-
-        if is_weighted:
-            weights = [1, 3, 3, 1]
-            ranges = [(1, 20), (21, 50), (51, 80), (81, 100)]
-            selected_range = random.choices(ranges, weights=weights, k=1)[0]
-            rp = random.randint(selected_range[0], selected_range[1])
-        else:
-            rp = random.randint(1, 100)
-
-        # 生成运势描述
+        use_ai = config.get("use_ai_description", False)
+        
+        logger.info(f"[jrrp] 用户名: {user_name}, 配置: {config}")
+        logger.info(f"[jrrp] use_ai配置值: {use_ai}, 类型: {type(use_ai)}")
+        
+        # 生成人品值逻辑...
+        rp = 31  # 测试用固定值
+        
         if use_ai:
-            # 使用AI生成个性化运势解读
+            logger.info(f"[jrrp] AI功能已启用，准备调用AI")
             try:
                 umo = event.unified_msg_origin
+                logger.info(f"[jrrp] unified_msg_origin: {umo}")
+                
                 provider_id = await self.context.get_current_chat_provider_id(umo=umo)
+                logger.info(f"[jrrp] 获取到provider_id: {provider_id}")
                 
-                prompt = f"""用户{user_name}今天的人品值是{rp}（范围1-100）。
-请根据这个人品值生成一段有趣、个性化的今日运势解读。
-要求：
-1. 语气活泼亲切，带点幽默感
-2. 针对{rp}这个具体数值给出相应建议
-3. 包含1-2个具体的今日小贴士
-4. 用中文回复，长度在50-100字左右"""
-                
-                llm_resp = await self.context.llm_generate(
-                    chat_provider_id=provider_id,
-                    prompt=prompt,
-                    max_tokens=200,
-                    temperature=0.8
-                )
-                
-                message_str = llm_resp.completion_text.strip()
-                logger.info(f"AI生成运势描述成功：{message_str}")
-                
+                if not provider_id:
+                    logger.warning(f"[jrrp] 未获取到可用的AI模型提供商")
+                    message_str = self._get_fallback_description(rp, config)
+                else:
+                    prompt = f"""用户{user_name}今天的人品值是{rp}（范围1-100）。
+    请根据这个人品值生成一段有趣、个性化的今日运势解读。"""
+                    
+                    logger.info(f"[jrrp] 开始调用AI，prompt长度: {len(prompt)}")
+                    
+                    llm_resp = await self.context.llm_generate(
+                        chat_provider_id=provider_id,
+                        prompt=prompt,
+                        max_tokens=200,
+                        temperature=0.8
+                    )
+                    
+                    message_str = llm_resp.completion_text.strip()
+                    logger.info(f"[jrrp] AI生成成功: {message_str}")
+                    
             except Exception as e:
-                logger.error(f"AI生成运势描述失败：{e}")
-                # 失败时回退到固定描述
+                logger.error(f"[jrrp] AI调用异常: {str(e)}", exc_info=True)
                 message_str = self._get_fallback_description(rp, config)
         else:
-            # 使用固定描述
+            logger.info(f"[jrrp] AI功能未启用，使用固定描述")
             message_str = self._get_fallback_description(rp, config)
-
+        
+        logger.info(f"[jrrp] 最终回复: {message_str}")
         yield event.plain_result(f"{user_name}，你今天的人品是{rp}，{message_str}")
 
     def _get_fallback_description(self, rp: int, config: dict) -> str:
