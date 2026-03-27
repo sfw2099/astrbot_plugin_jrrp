@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-@register("jrrp", "exusiaiwei", "一个支持自定义配置的人品插件", "1.3.0")
+@register("jrrp", "exusiaiwei", "一个支持 Web 自定义的人品插件", "1.3.0")
 class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
@@ -17,8 +17,7 @@ class MyPlugin(Star):
         
         # 安全获取配置
         config = self.context.get_config() or {}
-        weighted_random = config.get("weighted_random", True)
-        fortune_levels = config.get("fortune_levels", [])
+        is_weighted = config.get("weighted_random", True)
 
         # 保持原有的日期种子逻辑
         utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
@@ -27,7 +26,7 @@ class MyPlugin(Star):
         random.seed(userseed)
 
         # 计算人品值
-        if weighted_random:
+        if is_weighted:
             # 保持原有的加权区间逻辑
             weights = [1, 3, 3, 1]
             ranges = [(1, 20), (21, 50), (51, 80), (81, 100)]
@@ -36,18 +35,25 @@ class MyPlugin(Star):
         else:
             rp = random.randint(1, 100)
 
-        # 查找对应的描述
+        # 定义分数段与配置项的映射
+        # 这里的范围保持你原始设计的 1-10, 11-30, ...
+        fortune_ranges = [
+            ((1, 10), "desc_1"),
+            ((11, 30), "desc_2"),
+            ((31, 60), "desc_3"),
+            ((61, 80), "desc_4"),
+            ((81, 100), "desc_5")
+        ]
+
         message_str = "今天的运势未知，请自行判断！"
-        for level in fortune_levels:
-            # 增加安全检查，防止配置项缺失 key
-            l_min = level.get("min", 0)
-            l_max = level.get("max", 0)
-            if l_min <= rp <= l_max:
-                message_str = level.get("desc", message_str)
+        for (low, high), config_key in fortune_ranges:
+            if low <= rp <= high:
+                # 从配置中读取对应的描述，若缺失则使用默认语
+                message_str = config.get(config_key, message_str)
                 break
 
         yield event.plain_result(f"{user_name}，你今天的人品是{rp}，{message_str}")
 
     async def terminate(self):
-        '''当插件被卸载/停用时会调用。'''
+        '''插件卸载时调用'''
         pass
