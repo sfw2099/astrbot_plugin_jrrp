@@ -10,7 +10,7 @@ class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
-    @filter.command("jrrp_config")
+    @filter.command("jrrp_setting")
     async def show_config(self, event: AstrMessageEvent):
         '''显示当前插件配置'''
         config = self.context.get_config() or {}
@@ -20,10 +20,9 @@ class MyPlugin(Star):
         provider_id = await self.context.get_current_chat_provider_id(umo=umo)
         
         info = f"""当前配置:
-    - 启用高分加权: {config.get('weighted_random', True)}
-    - 启用AI运势解读: {config.get('use_ai_description', False)}
-    - 当前AI提供商: {provider_id or '未配置'}
-    - 所有配置项: {config}"""
+- 启用高分加权: {config.get('weighted_random', True)}
+- 启用AI运势解读: {config.get('use_ai_description', False)}
+- 当前AI提供商: {provider_id or '未配置'}"""
         
         yield info
 
@@ -44,11 +43,22 @@ class MyPlugin(Star):
         logger.info(f"[jrrp] 用户名: {user_name}, 配置: {config}")
         logger.info(f"[jrrp] use_ai配置值: {use_ai}, 类型: {type(use_ai)}")
         
-        # 生成人品值逻辑...
-        rp = 31  # 测试用固定值
+        # 生成人品值（修正：使用完整逻辑而不是硬编码）
+        utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
+        date_str = utc_8.strftime("/%y/%m%d")
+        userseed = hash(date_str + user_name)
+        random.seed(userseed)
+
+        if is_weighted:
+            weights = [1, 3, 3, 1]
+            ranges = [(1, 20), (21, 50), (51, 80), (81, 100)]
+            selected_range = random.choices(ranges, weights=weights, k=1)[0]
+            rp = random.randint(selected_range[0], selected_range[1])
+        else:
+            rp = random.randint(1, 100)
         
         if use_ai:
-            logger.info(f"[jrrp] AI功能已启用，准备调用AI")
+            logger.info(f"[jrrp] AI功能已启用，准备调用AI，人品值: {rp}")
             try:
                 umo = event.unified_msg_origin
                 logger.info(f"[jrrp] unified_msg_origin: {umo}")
@@ -61,7 +71,12 @@ class MyPlugin(Star):
                     message_str = self._get_fallback_description(rp, config)
                 else:
                     prompt = f"""用户{user_name}今天的人品值是{rp}（范围1-100）。
-    请根据这个人品值生成一段有趣、个性化的今日运势解读。"""
+请根据这个人品值生成一段有趣、个性化的今日运势解读。
+要求：
+1. 语气活泼亲切，带点幽默感
+2. 针对{rp}这个具体数值给出相应建议
+3. 包含1-2个具体的今日小贴士
+4. 用中文回复，长度在50-100字左右"""
                     
                     logger.info(f"[jrrp] 开始调用AI，prompt长度: {len(prompt)}")
                     
