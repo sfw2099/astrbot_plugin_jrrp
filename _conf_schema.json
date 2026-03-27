@@ -7,38 +7,33 @@
     },
     "use_ai_description": {
         "type": "bool",
-        "title": "启用AI运势解读",
-        "description": "开启后，使用AI大模型生成个性化的运势描述",
+        "title": "启用 AI 运势生成",
+        "description": "开启后，将调用当前的人格 AI 动态生成运势文案（覆盖默认文案）",
         "default": false
     },
     "desc_1": {
         "type": "string",
-        "title": "人品值1-10描述",
-        "description": "人品值在1-10区间时的描述文本",
+        "title": "运势描述 (1-10)",
         "default": "人品已欠费停机，建议今天就躺平吧！🥲"
     },
     "desc_2": {
         "type": "string",
-        "title": "人品值11-30描述",
-        "description": "人品值在11-30区间时的描述文本",
+        "title": "运势描述 (11-30)",
         "default": "普通的一天，像白开水一样平淡无奇~"
     },
     "desc_3": {
         "type": "string",
-        "title": "人品值31-60描述",
-        "description": "人品值在31-60区间时的描述文本",
+        "title": "运势描述 (31-60)",
         "default": "运气不错哦，可以试试抽卡或者告白什么的！✨"
     },
     "desc_4": {
         "type": "string",
-        "title": "人品值61-80描述",
-        "description": "人品值在61-80区间时的描述文本",
+        "title": "运势描述 (61-80)",
         "default": "今日锦鲤附体！适合做重要决定和冒险！🐟"
     },
     "desc_5": {
         "type": "string",
-        "title": "人品值81-100描述",
-        "description": "人品值在81-100区间时的描述文本",
+        "title": "运势描述 (81-100)",
         "default": "欧皇降临！今天你就是天选之人，无敌了！👑"
     }
 }
