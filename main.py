@@ -10,6 +10,23 @@ class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
 
+    @filter.command("jrrp_config")
+    async def show_config(self, event: AstrMessageEvent):
+        '''显示当前插件配置'''
+        config = self.context.get_config() or {}
+        
+        # 检查AI提供商
+        umo = event.unified_msg_origin
+        provider_id = await self.context.get_current_chat_provider_id(umo=umo)
+        
+        info = f"""当前配置:
+    - 启用高分加权: {config.get('weighted_random', True)}
+    - 启用AI运势解读: {config.get('use_ai_description', False)}
+    - 当前AI提供商: {provider_id or '未配置'}
+    - 所有配置项: {config}"""
+        
+        yield info
+
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent = None):
         '''今日人品值查询'''
