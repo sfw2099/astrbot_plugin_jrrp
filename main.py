@@ -30,7 +30,7 @@ class MyPlugin(Star):
     async def jrrpcfg(self, event: AstrMessageEvent):
         '''查询当前配置状态，防止事件穿透给主 AI'''
         cfg = self.get_plugin_config()
-        use_ai = cfg.get("use_ai_description", False)
+        use_ai = cfg.get("use_ai_description", True)
         is_weighted = cfg.get("weighted_random", True)
         
         reply = (
