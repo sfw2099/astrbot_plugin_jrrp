@@ -10,67 +10,129 @@ class MyPlugin(Star):
     def __init__(self, context: Context):
         super().__init__(context)
         logger.info("[jrrp] 插件初始化完成")
-
-    def _get_plugin_config(self):
-        """
-        安全地获取本插件的配置字典。
-        AstrBot中，插件配置可能存储在全局配置的以插件ID（'jrrp'）为键的子字典中。
-        """
-        # 1. 获取完整配置
-        all_config = self.context.get_config() or {}
-        
-        # 2. 优先尝试从插件ID键下获取配置（这是AstrBot常见存储方式）
-        plugin_config = all_config.get("jrrp", {})
-        
-        # 3. 如果上述方式未找到，尝试直接从根配置中查找（备用逻辑）
-        if not plugin_config and "use_ai_description" in all_config:
-            # 如果配置是扁平化的，则直接使用根配置
-            plugin_config = all_config
-            logger.info("[jrrp] 配置模式：扁平化根配置")
-        else:
-            logger.info(f"[jrrp] 配置模式：嵌套配置 (jrrp: {plugin_config})")
-        
-        return plugin_config
-
-    @filter.command("rpconfig")
+        # 初始化时尝试加载配置
+        self._load_config()
+    
+    def _load_config(self):
+        """从AstrBot配置系统加载插件配置"""
+        try:
+            # 方法1：使用AstrBot的标准配置获取方式
+            config = self.context.get_config_manager().get_plugin_config("jrrp")
+            if config:
+                logger.info(f"[jrrp] 通过get_plugin_config获取配置: {config}")
+                self.plugin_config = config
+                return
+            
+            # 方法2：尝试从全局配置中查找
+            all_config = self.context.get_config() or {}
+            logger.info(f"[jrrp] 完整配置键: {list(all_config.keys())}")
+            
+            # 在全局配置中搜索jrrp相关配置
+            for key in all_config:
+                if "jrrp" in key.lower():
+                    logger.info(f"[jrrp] 找到相关配置键: {key} = {all_config[key]}")
+                    if isinstance(all_config[key], dict):
+                        self.plugin_config = all_config[key]
+                        return
+            
+            # 方法3：尝试获取配置管理器中的插件配置
+            try:
+                config_manager = getattr(self.context, "config_manager", None)
+                if config_manager:
+                    plugin_config = config_manager.get("jrrp", {})
+                    if plugin_config:
+                        self.plugin_config = plugin_config
+                        logger.info(f"[jrrp] 通过config_manager获取配置: {plugin_config}")
+                        return
+            except:
+                pass
+                
+            # 方法4：直接尝试从context的属性中获取
+            for attr in dir(self.context):
+                if "config" in attr.lower() or "setting" in attr.lower():
+                    try:
+                        value = getattr(self.context, attr)
+                        if isinstance(value, dict) and "jrrp" in value:
+                            self.plugin_config = value.get("jrrp", {})
+                            logger.info(f"[jrrp] 从context.{attr}获取配置")
+                            return
+                    except:
+                        continue
+            
+            logger.warning("[jrrp] 无法找到插件配置，使用默认配置")
+            self.plugin_config = {}
+            
+        except Exception as e:
+            logger.error(f"[jrrp] 加载配置失败: {e}")
+            self.plugin_config = {}
+    
+    def _get_config_value(self, key: str, default=None):
+        """安全获取配置值"""
+        return self.plugin_config.get(key, default)
+    
+    @filter.command("jrrpinfo")
     async def show_config(self, event: AstrMessageEvent):
-        '''显示当前插件配置 - 使用更独特的命令名'''
-        plugin_config = self._get_plugin_config()
+        '''显示当前插件配置 - 使用独特的命令名'''
+        # 重新加载配置以确保获取最新值
+        self._load_config()
         
-        # 从正确的配置位置读取值
-        use_ai = plugin_config.get("use_ai_description", False)
-        is_weighted = plugin_config.get("weighted_random", True)
+        use_ai = self._get_config_value("use_ai_description", False)
+        is_weighted = self._get_config_value("weighted_random", True)
         
-        # 检查AI提供商是否可用
+        # 检查AI提供商
         umo = event.unified_msg_origin
         provider_id = await self.context.get_current_chat_provider_id(umo=umo)
         
-        info = f"""🔧 jrrp插件当前配置：
-• 启用AI运势解读: **{"✅ 是" if use_ai else "❌ 否"}**
-• 启用高分加权: **{"✅ 是" if is_weighted else "❌ 否"}**
-• 可用AI提供商: {provider_id or "（未配置或全局未启用）"}"""
+        # 显示完整配置用于调试
+        config_info = "\n".join([f"  - {k}: {v}" for k, v in self.plugin_config.items()])
+        
+        info = f"""🔧 jrrp插件配置详情：
+• AI运势解读: {"✅已启用" if use_ai else "❌未启用"}
+• 高分加权: {"✅已启用" if is_weighted else "❌未启用"}
+• AI提供商: {provider_id or "未配置"}
+• 所有配置项:
+{config_info if config_info else "  无配置信息"}"""
         
         yield info
+
+    @filter.command("testconfig")
+    async def test_config(self, event: AstrMessageEvent):
+        '''测试配置读取'''
+        # 获取完整的上下文信息
+        all_config = self.context.get_config() or {}
+        
+        # 列出所有可能的配置位置
+        config_locations = []
+        for key, value in all_config.items():
+            if isinstance(value, dict):
+                config_locations.append(f"{key} (dict)")
+            else:
+                config_locations.append(f"{key}: {value}")
+        
+        yield f"📋 配置位置测试:\n" + "\n".join(config_locations[:20])  # 只显示前20个
 
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent = None):
         '''今日人品值查询'''
-        logger.info(f"[jrrp] 开始处理命令")
-        
         if event is None:
             yield "无法获取事件信息"
             return
         
+        # 重新加载配置以确保获取最新值
+        self._load_config()
+        
         user_name = event.get_sender_name()
+        use_ai = self._get_config_value("use_ai_description", False)
+        is_weighted = self._get_config_value("weighted_random", True)
         
-        # 使用修正后的方法获取配置
-        plugin_config = self._get_plugin_config()
-        use_ai = plugin_config.get("use_ai_description", False)
-        is_weighted = plugin_config.get("weighted_random", True)
+        logger.info(f"[jrrp] 用户:{user_name}, AI启用:{use_ai}, 加权:{is_weighted}, 配置:{self.plugin_config}")
         
-        logger.info(f"[jrrp] 用户:{user_name}, AI启用状态:{use_ai}, 加权状态:{is_weighted}")
+        # 如果配置为空，强制显示配置信息
+        if not self.plugin_config:
+            yield f"{user_name}，插件配置加载异常，请检查AstrBot配置界面是否已保存配置。发送 /jrrpinfo 查看详情。"
+            return
         
-        # 生成基于日期的确定性随机人品值
+        # 生成人品值
         utc_8 = datetime.now(ZoneInfo("Asia/Shanghai"))
         date_str = utc_8.strftime("/%y/%m%d")
         userseed = hash(date_str + user_name)
@@ -86,7 +148,7 @@ class MyPlugin(Star):
         
         logger.info(f"[jrrp] 生成人品值: {rp}")
         
-        # 根据配置决定使用AI生成还是固定描述
+        # AI生成或固定描述
         if use_ai:
             logger.info(f"[jrrp] AI功能已启用，尝试调用...")
             try:
@@ -94,46 +156,44 @@ class MyPlugin(Star):
                 provider_id = await self.context.get_current_chat_provider_id(umo=umo)
                 
                 if not provider_id:
-                    message_str = self._get_fallback_description(rp, plugin_config)
-                    logger.warning(f"[jrrp] 无可用AI提供商，已回退到固定描述。")
+                    message_str = self._get_fallback_description(rp)
+                    logger.warning("[jrrp] 无可用AI提供商，使用固定描述")
                 else:
-                    # 构造请求AI的提示词
-                    prompt = f"""用户“{user_name}”的今日人品值（随机生成，范围1-100）为：{rp}。
-请根据此数值，生成一段简短、有趣、幽默的“今日运势”解读。用中文回答，长度控制在100字以内。"""
+                    prompt = f"""用户{user_name}今日人品值：{rp}/100。请生成一段有趣、个性化的运势解读，包含具体建议，用中文回复，100字内。"""
                     
-                    logger.info(f"[jrrp] 调用AI模型: {provider_id}")
                     llm_resp = await self.context.llm_generate(
                         chat_provider_id=provider_id,
                         prompt=prompt,
                         max_tokens=150,
-                        temperature=0.8
+                        temperature=0.7
                     )
                     
                     message_str = llm_resp.completion_text.strip()
-                    logger.info(f"[jrrp] AI生成成功，内容: {message_str[:50]}...")
+                    logger.info(f"[jrrp] AI生成成功: {message_str[:50]}...")
                     
             except Exception as e:
-                logger.error(f"[jrrp] AI调用过程中发生异常: {e}", exc_info=True)
-                message_str = self._get_fallback_description(rp, plugin_config)
+                logger.error(f"[jrrp] AI调用失败: {e}")
+                message_str = self._get_fallback_description(rp)
         else:
-            message_str = self._get_fallback_description(rp, plugin_config)
-            logger.info(f"[jrrp] AI功能未启用，使用固定描述。")
+            message_str = self._get_fallback_description(rp)
+            logger.info(f"[jrrp] AI未启用，使用固定描述")
         
-        yield event.plain_result(f"{user_name}，你今天的人品值是{rp}！{message_str}")
+        yield event.plain_result(f"{user_name}，今日人品：{rp}，{message_str}")
 
-    def _get_fallback_description(self, rp: int, config: dict) -> str:
-        """当AI未启用或调用失败时使用的固定描述后备"""
+    def _get_fallback_description(self, rp: int) -> str:
+        """固定描述后备"""
+        # 使用硬编码的描述，不依赖配置
         if 1 <= rp <= 10:
-            return config.get("desc_1", "人品已欠费停机，建议今天就躺平吧！🥲")
+            return "人品欠费，建议躺平！🥲"
         elif 11 <= rp <= 30:
-            return config.get("desc_2", "普通的一天，像白开水一样平淡无奇~")
+            return "平凡的一天~"
         elif 31 <= rp <= 60:
-            return config.get("desc_3", "运气不错哦，可以试试抽卡或者告白什么的！✨")
+            return "运气不错，适合尝试！✨"
         elif 61 <= rp <= 80:
-            return config.get("desc_4", "今日锦鲤附体！适合做重要决定和冒险！🐟")
+            return "锦鲤附体，勇敢冒险！🐟"
         elif 81 <= rp <= 100:
-            return config.get("desc_5", "欧皇降临！今天你就是天选之人，无敌了！👑")
-        return "今天的运势未知，请自行判断！"
+            return "欧皇降临，无敌！👑"
+        return "运势未知~"
 
     async def terminate(self):
         logger.info("[jrrp] 插件终止")
